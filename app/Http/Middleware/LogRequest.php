@@ -18,7 +18,9 @@ class LogRequest
         $response = $next($request);
         app('log')->info("REQUEST HEAD :",array("url"=>$request->fullUrl(),"method"=>$request->method(),"source_ip"=>$request->ip(),"api_user"=>$this->getApiUser()));
         $request->all() !== null && is_array($request->all()) ? app('log')->info("REQUEST BODY :", $request->all()) : app('log')->info("REQUEST BODY :", array());
-        !empty($response->getContent()) && ($response->getContent() !== null) ? app('log')->info("RESPONSE :", json_decode($response->getContent(),true)) : app('log')->info("RESPONSE BODY :", array());
+        // Non-JSON responses (e.g. error pages) decode to null, which the logger rejects as context.
+        $responseBody = json_decode((string) $response->getContent(), true);
+        is_array($responseBody) ? app('log')->info("RESPONSE :", $responseBody) : app('log')->info("RESPONSE BODY :", array());
         return $response;
     }
     private function getApiUser()
