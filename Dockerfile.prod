@@ -1,0 +1,22 @@
+# Same PHP version as the runtime image: composer.lock pins packages that do not support newer PHP.
+FROM php:8.2-cli AS vendor
+RUN apt-get update && apt-get install -y --no-install-recommends git unzip && rm -rf /var/lib/apt/lists/*
+COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-interaction --no-scripts --no-autoloader --prefer-dist
+COPY . .
+RUN composer dump-autoload --optimize --no-dev
+
+FROM php:8.2-apache
+# mysqli is used by the background workers, pdo_mysql by the Lumen app.
+RUN apt-get update && apt-get install -y --no-install-recommends libzip-dev \
+    && docker-php-ext-install mysqli pdo_mysql bcmath zip opcache \
+    && a2enmod rewrite \
+    && echo 'ServerName localhost' > /etc/apache2/conf-available/servername.conf && a2enconf servername \
+    && rm -rf /var/lib/apt/lists/*
+COPY deploy/php.ini /usr/local/etc/php/conf.d/zz-app.ini
+COPY deploy/apache.conf /etc/apache2/conf-available/pigeon-api.conf
+RUN a2enconf pigeon-api
+WORKDIR /var/www/html
+COPY --from=vendor --chown=www-data:www-data /app /var/www/html

@@ -8,6 +8,14 @@ require_once __DIR__.'/../vendor/autoload.php';
 
 date_default_timezone_set(env('APP_TIMEZONE', 'Africa/Kampala'));
 
+// Behind a reverse proxy (Caddy in production), take the client IP from X-Forwarded-For so ipCheck and throttling see the real caller.
+if (env('TRUSTED_PROXIES')) {
+    Illuminate\Http\Request::setTrustedProxies(
+        explode(',', env('TRUSTED_PROXIES')),
+        Illuminate\Http\Request::HEADER_X_FORWARDED_FOR | Illuminate\Http\Request::HEADER_X_FORWARDED_HOST | Illuminate\Http\Request::HEADER_X_FORWARDED_PORT | Illuminate\Http\Request::HEADER_X_FORWARDED_PROTO
+    );
+}
+
 /*
 |--------------------------------------------------------------------------
 | Create The Application

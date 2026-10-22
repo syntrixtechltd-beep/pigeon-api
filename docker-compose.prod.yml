@@ -1,0 +1,49 @@
+# Production stack for a single VM: 1 API container + the two background workers -> MariaDB installed on the VM itself.
+# Uses the same database as pigeon-dashboard; see pigeon-dashboard/deploy/host-db-setup.md.
+# Public traffic comes through the Caddy container in pigeon-dashboard's docker-compose.prod.yml, which reaches the API
+# over the shared "pigeon-edge" network and serves it at gateway-api.syntrixtech.org.
+# One-time setup on the VM:  docker network create pigeon-edge
+# Usage:  docker compose -f docker-compose.prod.yml up -d --build
+# .env.prod is mounted as the app's .env. The workers parse that file directly, so DB_HOST in it must be host.docker.internal.
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile.prod
+  image: pigeon-api:prod
+  restart: unless-stopped
+  volumes:
+    - ./.env.prod:/var/www/html/.env:ro
+    - logs:/var/www/html/storage/logs
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+services:
+  api:
+    <<: *app
+    environment:
+      # Only Caddy can reach this container, so trust the address each request arrives from for X-Forwarded-For.
+      TRUSTED_PROXIES: REMOTE_ADDR
+    networks:
+      edge:
+        aliases: [pigeon-api]
+
+  # Sends pending transactions to MTN/Airtel and polls their status. Must run as exactly ONE instance.
+  mno-worker:
+    <<: *app
+    command: ["php", "checkPendingMNOTransactionService.php"]
+    user: www-data
+
+  # Delivers queued webhooks to API users. Must run as exactly ONE instance.
+  webhook-worker:
+    <<: *app
+    command: ["php", "checkPendingWebhooks.php"]
+    user: www-data
+
+networks:
+  edge:
+    name: pigeon-edge
+    external: true
+
+volumes:
+  logs:
