@@ -205,11 +205,13 @@ PK;
     }
     private function env($key)
     {
+        // The project's .env lives three levels up (coreAPI/thirdParty/AirtelMoney -> project root).
+        $envFile = dirname(__DIR__, 3).'/.env';
         if(function_exists('parse_ini_file'))
         {
-            if(file_exists(__DIR__.'/.env')) {
+            if(file_exists($envFile)) {
 
-                $env = (object) parse_ini_file(__DIR__.'/.env',FALSE,INI_SCANNER_RAW);
+                $env = (object) parse_ini_file($envFile,FALSE,INI_SCANNER_RAW);
                 if (property_exists($env, $key) === false)
                 {
                     return null;

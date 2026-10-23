@@ -327,7 +327,8 @@ class checkPendingMNOTransactionService
 
             $this->getMTNMoMoAPIAccessToken(1);
             $this->getMTNMoMoAPIAccessToken(2);
-            $this->getAirtelMoneyOpenAPIAccessToken();
+            // Without Airtel credentials every token request fails, so skip it rather than calling Airtel every 2 seconds.
+            if($this->env('AIRTEL_OPENAPI_BASE_URL')){$this->getAirtelMoneyOpenAPIAccessToken();}
 
             @$this->db->query("UPDATE transactions SET transactionStatus = 3, completionDate = CURRENT_TIMESTAMP WHERE initiationDate <= DATE_SUB(NOW(), INTERVAL 6 MINUTE) AND transactionStatus = 1");
 
