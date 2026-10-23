@@ -1,0 +1,31 @@
+#Load credentials
+menv() { grep "^$1=" .env.prod | cut -d= -f2- | tr -d '\r"'; }; HOST=$(menv MTN_HOST); TENV=$(menv MTN_ENV); C_USER=$(menv MTN_COLLECTIONS_USERNAME); C_PASS=$(menv MTN_COLLECTIONS_PASSWORD); C_KEY=$(menv MTN_COLLECTIONS_SUBSCRIPTION_KEY); D_USER=$(menv MTN_DISBURSEMENTS_USERNAME); D_PASS=$(menv MTN_DISBURSEMENTS_PASSWORD); D_KEY=$(menv MTN_DISBURSEMENTS_SUBSCRIPTION_KEY); echo "host=$HOST env=$TENV ckey=${#C_KEY} chars dkey=${#D_KEY} chars"
+
+# Check that the VM can reach MTN and get it IP
+curl -sS -o /dev/null -w "MTN reachable: HTTP %{http_code}\n" "https://$HOST/"
+curl -sS https://ifconfig.me; echo
+
+#COLLECTIONS
+#Get token, its stored in C_TOKEN
+C_RESP=$(curl -sS -X POST "https://$HOST/collection/token/" -u "$C_USER:$C_PASS" -H "Ocp-Apim-Subscription-Key: $C_KEY" -H "X-Target-Environment: $TENV" -H "Content-Length: 0" -w "\nHTTP %{http_code}"); C_TOKEN=$(echo "$C_RESP" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p'); echo "$C_RESP" | sed 's/"access_token":"[^"]*"/"access_token":"(hidden)"/'
+#Check balance
+curl -sS "https://$HOST/collection/v1_0/account/balance" -H "Authorization: Bearer $C_TOKEN" -H "Ocp-Apim-Subscription-Key: $C_KEY" -H "X-Target-Environment: $TENV" -w "\nHTTP %{http_code}\n"
+#Check that the number is an active mtn number
+curl -sS "https://$HOST/collection/v1_0/accountholder/msisdn/256782051328/active" -H "Authorization: Bearer $C_TOKEN" -H "Ocp-Apim-Subscription-Key: $C_KEY" -H "X-Target-Environment: $TENV" -w "\nHTTP %{http_code}\n"
+
+#DISBURSEMENTS
+#Get access token
+D_RESP=$(curl -sS -X POST "https://$HOST/disbursement/token/" -u "$D_USER:$D_PASS" -H "Ocp-Apim-Subscription-Key: $D_KEY" -H "X-Target-Environment: $TENV" -H "Content-Length: 0" -w "\nHTTP %{http_code}"); D_TOKEN=$(echo "$D_RESP" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p'); echo "$D_RESP" | sed 's/"access_token":"[^"]*"/"access_token":"(hidden)"/'
+curl -sS "https://$HOST/disbursement/v1_0/account/balance" -H "Authorization: Bearer $D_TOKEN" -H "Ocp-Apim-Subscription-Key: $D_KEY" -H "X-Target-Environment: $TENV" -w "\nHTTP %{http_code}\n"
+#Real transaction request
+REF=$(cat /proc/sys/kernel/random/uuid); curl -sS -X POST "https://$HOST/collection/v1_0/requesttopay" -H "Authorization: Bearer $C_TOKEN" -H "X-Reference-Id: $REF" -H "X-Target-Environment: $TENV" -H "Ocp-Apim-Subscription-Key: $C_KEY" -H "Content-Type: application/json" -d '{"amount":"500","currency":"UGX","externalId":"vm-test-001","payer":{"partyIdType":"MSISDN","partyId":"256782051328"},"payerMessage":"Test","payeeNote":"Test"}' -w "\nHTTP %{http_code}\n"
+#Check status after approving on phone
+curl -sS "https://$HOST/collection/v1_0/requesttopay/$REF" -H "Authorization: Bearer $C_TOKEN" -H "Ocp-Apim-Subscription-Key: $C_KEY" -H "X-Target-Environment: $TENV" -w "\nHTTP %{http_code}\n"
+
+
+Host / endpoint: https://proxy.momoapi.mtn.com/collection/token/
+X-Target-Environment: mtnuganda
+Product: Collections
+Subscription key: b2ceec91f7b94a4dad9e7d8328cbf7d4
+Server public IP: 35.226.19.162
+Error: Invalid subscription Key
